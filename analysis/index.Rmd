@@ -12,4 +12,4 @@ This  website contains the analysis of RNAseq sample to infer aneuploidy
 
 # Casper
 
-- [1-Paper PRESERVE](00_exploratory_analysis.html)
+- [1-CNV calling using CaSpER](00_casper_analysis.html)
