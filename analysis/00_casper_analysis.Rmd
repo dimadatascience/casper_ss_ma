@@ -174,7 +174,8 @@ mydatatable(loss.final)
 Below we show the fraction of genome affected by either CNV gain/loss/loh
 
 ```{r comparative_cnv_across_condition}
-tmp = rbind(gain.final, loh.final, loss.final)
+#tmp = rbind(gain.final, loh.final, loss.final)
+tmp = rbind(gain.final, loss.final)
 tmp = aggregate(tmp$width, list(tmp$ID), sum)
 tmp$x = tmp$x/ sum(cytoband[cytoband$V4=="q", "V3"])
 tmp$type = sub("^[^_]+_(.*)_[^_]+$", "\\1", tmp$Group.1)
@@ -186,7 +187,8 @@ ggplot(tmp, aes(x=type, y=x)) + geom_boxplot() + xlab("") + ylab("Fraction of ge
 
 ```{r comparative_cnv_across_condition_pertype}
 all = NULL
-cnv_list = list(gain=gain.final, loh=loh.final, loss=loss.final)
+# cnv_list = list(gain=gain.final, loh=loh.final, loss=loss.final)
+cnv_list = list(gain=gain.final, loss=loss.final)
 
 for(name in names(cnv_list)){
   tmp = cnv_list[[name]]
