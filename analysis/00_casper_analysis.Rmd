@@ -47,8 +47,8 @@ mydatatable <- function(x, rownames = FALSE){
 
 
 ```{r parameters}
-seed = 1000 # make it reproducible
-ncontrol = 20 # number of controls
+seed = 900 # make it reproducible
+ncontrol = 30 # number of controls
 ```
 
 # Objective
@@ -131,8 +131,11 @@ control.sample.ids = names(loh)[grep("HLT", names(loh))]
 set.seed(seed)
 control.sample.ids = sample(control.sample.ids, ncontrol)
 
+loh.name.mapping = loh.name.mapping[!(loh.name.mapping$loh.name %in% control.sample.ids), ]
+loh = loh[names(loh) %in% loh.name.mapping$loh.name]
+
 object <- CreateCasperObject(raw.data=data, loh.name.mapping=loh.name.mapping, sequencing.type="bulk", 
-  cnv.scale=3, loh.scale=3, matrix.type="normalized", expr.cutoff=4,
+  cnv.scale=3, loh.scale=3, matrix.type="normalized", expr.cutoff=4.5,
   annotation=annotation, method="iterative", loh=loh, filter="median",  
   control.sample.ids=control.sample.ids, cytoband=cytoband, log.transformed = FALSE, genomeVersion ="hg38")
 ```
@@ -204,8 +207,6 @@ for(name in names(cnv_list)){
 all$group = as.factor(all$group)
 ggplot(all, aes(x=type, y=x, col=group)) + geom_boxplot() + xlab("") + ylab("Fraction of genome affected")
 ```
-
-
 
 
 
