@@ -228,9 +228,6 @@ all$group = as.factor(all$group)
 ggplot(all, aes(x=type, y=x, col=group)) + geom_boxplot() + xlab("") + ylab("Fraction of genome affected")
 ```
 
-```{r}
-all
-```
 
 ```{r}
 tmp = all[all$type == "TNBC" & all$group=="loss",]
