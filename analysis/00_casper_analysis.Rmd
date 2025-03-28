@@ -208,6 +208,12 @@ ggplot(tmp, aes(x = Group.1, y = x)) +
   )
 ```
 
+```{r table_gain_loss_combined}
+colnames(tmp) = c("sample", "aneuploidy score", "cancer type")
+mydatatable(tmp)
+```
+
+
 ```{r comparative_cnv_across_condition_pertype}
 all = NULL
 # cnv_list = list(gain=gain.final, loh=loh.final, loss=loss.final)
@@ -229,6 +235,7 @@ ggplot(all, aes(x=type, y=x, col=group)) + geom_boxplot() + xlab("") + ylab("Fra
 ```
 
 
+
 ```{r}
 tmp = all[all$type == "TNBC" & all$group=="loss",]
 tmp <- tmp[order(tmp$x), ]
@@ -247,6 +254,10 @@ ggplot(tmp, aes(x = Group.1, y = x)) +
   )
 ```
 
+```{r table_loss}
+colnames(tmp) = c("sample", "aneuploidy score", "cancer type", "cnv_type")
+mydatatable(tmp)
+```
 
 ```{r}
 tmp = all[all$type == "TNBC" & all$group=="gain",]
@@ -264,6 +275,12 @@ ggplot(tmp, aes(x = Group.1, y = x)) +
     axis.text.y = element_text(size = 8),  # Adjust text size as needed
     plot.title = element_text(hjust = 0.5)
   )
+```
+
+
+```{r table_gain}
+colnames(tmp) = c("sample", "aneuploidy score", "cancer type", "cnv_type")
+mydatatable(tmp)
 ```
 
 # Correlation aneuplodity and CD82 expression
