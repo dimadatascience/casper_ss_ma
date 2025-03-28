@@ -17,9 +17,10 @@ knitr::opts_chunk$set(echo       = FALSE,
                       cache      = FALSE,
                       autodep    = TRUE,
                       fig.align  = 'center',
-                      fig.width  = 6,
-                      fig.height = 6,
-                      dpi =        300)
+                      fig.width  = 9,
+                      fig.height = 9,
+                      dpi =        300,
+                      dev = c("png", "pdf"))
 ```
 
 
@@ -177,15 +178,34 @@ mydatatable(loss.final)
 Below we show the fraction of genome affected by either CNV gain/loss/loh
 
 ```{r comparative_cnv_across_condition}
-#tmp = rbind(gain.final, loh.final, loss.final)
+# tmp = rbind(gain.final, loh.final, loss.final)
 tmp = rbind(gain.final, loss.final)
 tmp = aggregate(tmp$width, list(tmp$ID), sum)
 tmp$x = tmp$x/ sum(cytoband[cytoband$V4=="q", "V3"])
 tmp$type = sub("^[^_]+_(.*)_[^_]+$", "\\1", tmp$Group.1)
+aneuploidy = tmp
 ```
 
 ```{r boxplot_comparative_cnv_across_condition}
 ggplot(tmp, aes(x=type, y=x)) + geom_boxplot() + xlab("") + ylab("Fraction of genome affected")
+```
+
+```{r}
+tmp = tmp[tmp$type == "TNBC",]
+tmp <- tmp[order(tmp$x), ]
+tmp$Group.1 <- factor(tmp$Group.1, levels = tmp$Group.1)
+```
+
+```{r barplot_gain_loss_combined}
+ggplot(tmp, aes(x = Group.1, y = x)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +  # This flips the axes to make labels more readable
+  theme_minimal() +
+  labs(x = NULL, y = "Aneuploidity score", title = "Gain and loss combined") +
+  theme(
+    axis.text.y = element_text(size = 8),  # Adjust text size as needed
+    plot.title = element_text(hjust = 0.5)
+  )
 ```
 
 ```{r comparative_cnv_across_condition_pertype}
@@ -208,7 +228,63 @@ all$group = as.factor(all$group)
 ggplot(all, aes(x=type, y=x, col=group)) + geom_boxplot() + xlab("") + ylab("Fraction of genome affected")
 ```
 
+```{r}
+all
+```
 
+```{r}
+tmp = all[all$type == "TNBC" & all$group=="loss",]
+tmp <- tmp[order(tmp$x), ]
+tmp$Group.1 <- factor(tmp$Group.1, levels = tmp$Group.1)
+```
+
+```{r barplot_loss}
+ggplot(tmp, aes(x = Group.1, y = x)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +  # This flips the axes to make labels more readable
+  theme_minimal() +
+  labs(x = NULL, y = "Aneuploidity score", title = "Loss") +
+  theme(
+    axis.text.y = element_text(size = 8),  # Adjust text size as needed
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+
+```{r}
+tmp = all[all$type == "TNBC" & all$group=="gain",]
+tmp <- tmp[order(tmp$x), ]
+tmp$Group.1 <- factor(tmp$Group.1, levels = tmp$Group.1)
+```
+
+```{r barplot_gain}
+ggplot(tmp, aes(x = Group.1, y = x)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +  # This flips the axes to make labels more readable
+  theme_minimal() +
+  labs(x = NULL, y = "Aneuploidity score", title = "Gain") +
+  theme(
+    axis.text.y = element_text(size = 8),  # Adjust text size as needed
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+# Correlation aneuplodity and CD82 expression
+
+```{r}
+gene_id = annotation$Gene[annotation$GeneSymbol == "CD82"]
+cd82_expression = t(data[gene_id, ])
+expr_aneuploidy = merge(aneuploidy, cd82_expression, by.y=0, by.x=1)
+
+ggplot(expr_aneuploidy, aes(x = x, y = ENSG00000085117, color = type)) +
+  geom_point() +  # Scatter plot
+  stat_smooth(method = "lm", se = FALSE) +  # Add linear fit without confidence interval
+  stat_cor(aes(label = ..r.label..), method = "spearman", label.x.npc = "left", label.y.npc = "top") +  # Correlation coefficient
+  theme_minimal() +
+  labs(title = "",
+       x = "Aneuploidy score",
+       y = "CD82 expression")
+```
 
 <!-- # ```{r qc_2} -->
 <!-- # cd82_expr = t(data[rownames(data) == annotation$Gene[annotation$GeneSymbol=="CD82"], ]) -->
