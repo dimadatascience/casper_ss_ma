@@ -1,0 +1,264 @@
+---
+title: "Tumour microenvironment cell estimation (ConsensusTME)"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  workflowr::wflow_html:
+    toc_depth: 4
+editor_options:
+  chunk_output_type: console
+---
+
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+## ConsensusTME
+
+```{r import}
+library(RSQLite)
+library(ConsensusTME)
+
+# ConsensusTME::cancerAll # BRCA
+```
+
+The ConsensusTME package provides a integrative tool for R that uses a consensus approach to generating cancer specific signatures for multiple cell types found within the tumour microenvironment.
+
+These consensus gene sets are then used within a ssGSEA framework to provide normalised enrichment scores for each of the cell types representing the relative abundance of cell types across multiple samples.
+
+It is important to note that results generated in this way will provide quantification of cell types that are relative across samples rather than across cell types.
+
+ returns estimation of cell type abundance for each sample in the bulk tumour gene expression matrix.
+ Immune Score represents the overall level of immune infiltration for each sample.
+
+```{r}
+# sample_info table
+sample_info = read.table("/hpcnfs/scratch/DIMA/piva/casper_ss_ma/data/samples_metadata.csv", header=T, sep = ',', row.names = 1)
+rownames(sample_info) <- sample_info$samplename
+sample_info$condition <- as.factor(sample_info$condition)
+sample_info$batch <- as.factor(sample_info$batches)
+
+
+# annotation
+load('/hpcnfs/scratch/DIMA/piva/casper_ss_ma/data/data.Rdata')
+#head(data) # TPM counts
+
+# convert ENS gene id to Gene symbol
+# gene symbol x patients # Matrix is a numerical matrix with gene symbol as rownames
+matrix=data
+genes=sub("\\..*", "", rownames(matrix))
+length(genes)
+length(unique(genes))
+
+gene_map <- setNames(annotation$GeneSymbol, annotation$Gene)
+symbols <- gene_map[genes]
+sum(is.na(symbols))
+sum(duplicated(symbols[!is.na(symbols)]))
+
+summary_df <- data.frame(
+  Total = length(symbols),
+  Unique = length(unique(symbols)),
+  NAs = sum(is.na(symbols)),
+  Duplicated = sum(duplicated(symbols[!is.na(symbols)])),
+  Empty = sum(symbols == "" | symbols == " ", na.rm = TRUE)
+)
+print(summary_df)
+
+symbols <- make.unique(as.character(symbols))
+matrix=apply(matrix, 2, as.numeric)
+rownames(matrix)=symbols
+
+matrix=matrix[!is.na(rownames(matrix)), ]
+matrix=matrix[rownames(matrix)!=" ", ]
+matrix=matrix[rownames(matrix)!="", ]
+
+matrix[1:10,1:10]
+
+```
+
+
+```{r}
+consensus=ConsensusTME::consensusTMEAnalysis(matrix, cancerType = 'BRCA', )
+
+```
+
+```{r}
+
+consensus=t(consensus)
+consensus=merge(consensus, sample_info, by = "row.names", all = TRUE )
+
+```
+
+
+# Correlation between TME enrichment and aneuploidy score (from CaSPeR)
+```{r, fig.width=20, fig.height=25, out.width="100%"}
+library(ggplot2)
+library(ggpubr)    # For stat_cor()
+library(patchwork) # For layout
+
+target_var <- "aneuploidy_score"
+feature_vars = colnames(consensus)[2:20]
+df=consensus
+
+# Create scatterplots with correlation
+plots <- lapply(feature_vars, function(var) {
+  ggplot(df, aes_string(x = var, y = target_var, color = "condition")) +
+    geom_point(alpha = 0.6) +
+    geom_smooth(method = "lm", se = FALSE, color = "blue") +
+    stat_cor(method = "pearson", label.x.npc = "left", label.y.npc = "top", size = 3.5) +
+    ggtitle(var) +
+    theme_minimal(base_size = 10)
+})
+
+# Combine into a grid
+wrap_plots(plots, ncol = 4)
+
+
+```
+
+# Correlation between TME enrichment and CD82 gene expression
+
+```{r, fig.width=20, fig.height=25, out.width="100%"}
+
+
+target_var <- "ENSG00000085117"
+feature_vars = colnames(consensus)[2:20]
+df=consensus
+
+# Create scatterplots with correlation
+plots <- lapply(feature_vars, function(var) {
+  ggplot(df, aes_string(x = var, y = target_var, color = "condition")) +
+    geom_point(alpha = 0.6) +
+    geom_smooth(method = "lm", se = FALSE, color = "blue") +
+    stat_cor(method = "pearson", label.x.npc = "left", label.y.npc = "top", size = 3.5) +
+    ggtitle(var) +
+    theme_minimal(base_size = 10)
+})
+
+# Combine into a grid
+wrap_plots(plots, ncol = 4)
+
+```
+
+
+# Boxplot of TME enrichment across conditions
+
+```{r, fig.width=20, fig.height=25, out.width="100%"}
+df=consensus
+df=df[!is.na(df$ENSG00000085117), ]
+df$CD82_levels=ifelse(df$ENSG00000085117>median(df$ENSG00000085117), 'high-CD82', 'low-CD82')
+df$aneuploidy_score_levels=ifelse(df$aneuploidy_score>median(df$aneuploidy_score), 'high-aneuploidy_score', 'low-aneuploidy_score')
+
+
+condition_col <- "condition"
+boxplot_vars = colnames(consensus)[2:20]
+
+plots <- lapply(boxplot_vars, function(var) {
+  ggplot(df, aes_string(x = condition_col, y = var, fill = condition_col)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.7) +
+    geom_jitter(width = 0.2, alpha = 0.4, size = 0.8) +
+    ggtitle(var) +
+    theme_minimal(base_size = 10) +
+    theme(legend.position = "none")
+})
+wrap_plots(plots, ncol = 4)
+
+
+```
+
+# Boxplot of TME enrichment across CD82 gene levels (stratified by median)
+
+```{r, fig.width=20, fig.height=25, out.width="100%"}
+condition_col <- "CD82_levels"
+boxplot_vars = colnames(consensus)[2:20]
+
+plots <- lapply(boxplot_vars, function(var) {
+  ggplot(df, aes_string(x = condition_col, y = var, fill = condition_col)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.7) +
+    geom_jitter(width = 0.2, alpha = 0.4, size = 0.8) +
+    ggtitle(var) +
+    theme_minimal(base_size = 10) +
+    theme(legend.position = "none")
+})
+wrap_plots(plots, ncol = 4)
+
+
+```
+
+# Boxplot of TME enrichment across aneuploidy score levels (stratified by median)
+
+```{r, fig.width=20, fig.height=25, out.width="100%"}
+condition_col <- "aneuploidy_score_levels"
+boxplot_vars = colnames(consensus)[2:20]
+
+plots <- lapply(boxplot_vars, function(var) {
+  ggplot(df, aes_string(x = condition_col, y = var, fill = condition_col)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.7) +
+    geom_jitter(width = 0.2, alpha = 0.4, size = 0.8) +
+    ggtitle(var) +
+    theme_minimal(base_size = 10) +
+    theme(legend.position = "none")
+})
+wrap_plots(plots, ncol = 4)
+
+```
+# Boxplot of TME enrichment across CD82 expression categories (by IHC) in TNBC
+
+```{r, fig.width=20, fig.height=25, out.width="100%"}
+condition_col <-"CATEGORY.1." # "CATEGORY.1." #"CD82_levels"
+boxplot_vars = colnames(consensus)[2:20]
+
+plots <- lapply(boxplot_vars, function(var) {
+  ggplot(df[df$condition=="TNBC",], aes_string(x = condition_col, y = var, fill = condition_col)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.7) +
+    geom_jitter(width = 0.2, alpha = 0.4, size = 0.8) +
+    ggtitle(var) +
+    theme_minimal(base_size = 10) +
+    theme(legend.position = "none")
+})
+wrap_plots(plots, ncol = 4)
+
+
+```
+
+# Boxplot of TME enrichment across aneuploidy score levels in TNBC
+
+```{r, fig.width=20, fig.height=25, out.width="100%"}
+condition_col <- "aneuploidy_score_levels"
+boxplot_vars = colnames(consensus)[2:20]
+
+plots <- lapply(boxplot_vars, function(var) {
+  ggplot(df[df$condition=="TNBC",], aes_string(x = condition_col, y = var, fill = condition_col)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.7) +
+    geom_jitter(width = 0.2, alpha = 0.4, size = 0.8) +
+    ggtitle(var) +
+    theme_minimal(base_size = 10) +
+    theme(legend.position = "none")
+})
+wrap_plots(plots, ncol = 4)
+
+```
+
+
+```{r, fig.width=20, fig.height=25, out.width="100%"}
+condition_col <- "aneuploidy_score_levels"
+boxplot_vars = colnames(consensus)[2:20]
+
+plots <- lapply(boxplot_vars, function(var) {
+  ggplot(df, aes_string(x = condition_col, y = var, fill = 'condition')) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.7) +
+    geom_jitter(width = 0.2, alpha = 0.4, size = 0.8) +
+    ggtitle(var) +
+    theme_minimal(base_size = 10) +
+    theme(legend.position = "none")
+})
+wrap_plots(plots, ncol = 4)
+
+```
+
+```{r}
+#write.csv(consensus, '/hpcnfs/scratch/DIMA/piva/casper_ss_ma/data/consensusTME.csv')
+```
+
+
