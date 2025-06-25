@@ -374,7 +374,7 @@ tmp =plotPCA(
 
 percentVar <- attr(tmp, "percentVar")
 
-plotly::plot_ly(data=tmp, x=~PC1, y=~PC2, text = ~name, color=~condition ) %>%
+plotly::plot_ly(data=tmp, x=~PC1, y=~PC2, text = ~name, color=~condition, colors=c("red", "royalblue") ) %>%
   layout(
     xaxis = list(title = paste0("PC1 (", round(percentVar[1] * 100, 1), "% variance)")),
     yaxis = list(title = paste0("PC2 (", round(percentVar[2] * 100, 1), "% variance)"))
@@ -450,7 +450,7 @@ Meaning of Colors
 
 top20_genes <- final_table %>%
   as.data.frame() %>%
-  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
+  filter(!is.na(gene_symbol)  & trimws(gene_symbol) != "") %>%  ## to have filter gene symbol
   arrange(padj) %>%
   head(20) 
 
@@ -498,7 +498,7 @@ pheatmap(
 ```{r heatmap_DEgenes1, fig.width=10, fig.height=10}
 de_genes <- final_table %>%
   as.data.frame() %>%
-  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
+  filter(!is.na(gene_symbol)  & trimws(gene_symbol) != "") %>%  ## to have filter gene symbol
   arrange(padj) 
 
 de_counts <- all[de_genes$gene, ]
@@ -760,7 +760,7 @@ tmp =plotPCA(
 )
 
 percentVar <- attr(tmp, "percentVar")
-plotly::plot_ly(data=tmp, x=~PC1, y=~PC2, text = ~name, color=~condition ) %>%
+plotly::plot_ly(data=tmp, x=~PC1, y=~PC2, text = ~name, color=~condition, colors=c("red", "royalblue") ) %>%
   layout(
     xaxis = list(title = paste0("PC1 (", round(percentVar[1] * 100, 1), "% variance)")),
     yaxis = list(title = paste0("PC2 (", round(percentVar[2] * 100, 1), "% variance)"))
@@ -834,7 +834,7 @@ Meaning of Colors
 
 top20_genes <- final_table %>%
   as.data.frame() %>%
-  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
+  filter(!is.na(gene_symbol)  & trimws(gene_symbol) != "") %>%  ## to have filter gene symbol
   arrange(padj) %>%
   head(20) 
 
@@ -863,7 +863,7 @@ pheatmap(
 ```{r heatmap_DEgenes2, fig.width=10, fig.height=10}
 de_genes <- final_table %>%
   as.data.frame() %>%
-  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
+  filter(!is.na(gene_symbol)  & trimws(gene_symbol) != "") %>%  ## to have filter gene symbol
   arrange(padj) 
 
 de_counts <- all[de_genes$gene, ]
@@ -1085,7 +1085,7 @@ tmp =plotPCA(
 )
 
 percentVar <- attr(tmp, "percentVar")
-plotly::plot_ly(data=tmp, x=~PC1, y=~PC2, text = ~name, color=~condition) %>%
+plotly::plot_ly(data=tmp, x=~PC1, y=~PC2, text = ~name, color=~condition, colors=c("red", "royalblue")) %>%
   layout(
     xaxis = list(title = paste0("PC1 (", round(percentVar[1] * 100, 1), "% variance)")),
     yaxis = list(title = paste0("PC2 (", round(percentVar[2] * 100, 1), "% variance)"))
@@ -1161,7 +1161,7 @@ Meaning of Colors
 
 top20_genes <- final_table %>%
   as.data.frame() %>%
-  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
+  filter(!is.na(gene_symbol)  & trimws(gene_symbol) != "") %>%  ## to have filter gene symbol
   arrange(padj) %>%
   head(20) 
 
@@ -1188,7 +1188,7 @@ pheatmap(
 ```{r heatmap_DEgenes3, fig.width=10, fig.height=10}
 de_genes <- final_table %>%
   as.data.frame() %>%
-  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
+  filter(!is.na(gene_symbol)  & trimws(gene_symbol) != "") %>%  ## to have filter gene symbol
   arrange(padj) 
 
 de_counts <- all[de_genes$gene, ]
