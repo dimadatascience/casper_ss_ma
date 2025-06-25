@@ -14,6 +14,16 @@ This  website contains the analysis of RNAseq sample to infer aneuploidy
 
 - [1-CNV calling using CaSpER](00_casper_analysis.html)
 
+- [2-Differential Expression analysis between conditions](01_degs_go.html)
+
+- [3-Differential Expression analysis based on aneuploidy score](02_degs_go_aneuploidy.html)
+
+- [4-Differential Expression analysis based on CD82 gene expression](02_degs_go_CD82expr.html)
+
+- [5-Deconvolution analysis with ConsensusTME](04_deconvolution.html)
+
+
+
 
 # Resources
 

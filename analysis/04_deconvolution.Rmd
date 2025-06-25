@@ -21,6 +21,7 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 library(RSQLite)
 library(ConsensusTME)
 library(pheatmap)
+library("DT")
 
 # ConsensusTME::cancerAll # BRCA
 ```
@@ -31,7 +32,7 @@ The consensus gene sets are applied within a single-sample gene set enrichment a
 
 It is important to note that these scores allow for comparisons between samples, but not between different cell types in the same sample. The Immune Score summarizes the overall immune infiltration level for each sample and can be used to stratify tumors based on immune context.
 
-```{r}
+```{r matrix_setup}
 folderpath='/Volumes/scratch/DIMA/piva/casper_ss_ma/'
 
 # sample_info table
@@ -81,6 +82,14 @@ To investigate the relationship between TME content, CD82 gene expression and an
 
 - Aneuploidy score: Samples were categorized into high-aneuploidy and low-aneuploidy groups using a fixed threshold of 0.1 on the aneuploidy score (defined by looking at aneuploidy score distribution across all the conditions)
 
+```{r}
+# sample_info
+
+sample_info$CD82_levels=ifelse( sample_info$ENSG00000085117> median(sample_info$ENSG00000085117, na.rm = TRUE), 'high-CD82', 'low-CD82')
+sample_info$aneuploidy_score_levels=ifelse(sample_info$aneuploidy_score> 0.1, 'high-aneuploidy_score', 'low-aneuploidy_score')
+
+```
+
 
 
 ### Method selection
@@ -95,7 +104,7 @@ To estimate cell-type or pathway activity from bulk RNA-seq data, we applied gen
 For the following analysis, we used GSVA method and provided TPM counts matrix as input.
 
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+```{r run, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
 consensus_list=list()
 for (sm in c('ssgsea', 'singScore', 'gsva', 'plage', 'plage', 'zscore')){
   consensus_list[[sm]]=ConsensusTME::consensusTMEAnalysis(matrix, cancerType = 'BRCA', statMethod = sm)
@@ -106,20 +115,32 @@ for (sm in c('ssgsea', 'singScore', 'gsva', 'plage', 'plage', 'zscore')){
 
 ### Results
 The output of the ConsensusTME analysis is a matrix of cell-type scores, where each row represents a sample and each column corresponds to an estimated abundance or activity of a specific immune or stromal cell type.
-The following heatmap represents the results of the analysis
+The following heatmap represents the results of the analysis.
 
-```{r, fig.width=15, fig.height=10}
+```{r heatmap_gsva, fig.width=15, fig.height=10}
 
 # Create a data frame for annotation (must be a data frame with row names matching column names of matrix)
-annotation_df <- as.data.frame(sample_info[, "condition", drop = FALSE])
-colnames(annotation_df) <- "Condition"
+annotation_df <- as.data.frame(sample_info[, c( "condition" , "CD82_levels", "aneuploidy_score_levels" ), drop = FALSE])
+colnames(annotation_df) <- c( "Condition" , "CD82_levels", "Aneuploidy_score_levels" )
 annotation_colors <- list(
   Condition = c(
     "HLT" = "#66c2a5",
     "HRplus" = "#fc8d62",
     "TNBC" = "#8da0cb"
+  ),
+  CD82_levels = c(
+    "high-CD82"  = "#d95d39",
+    "low-CD82" = "#ffb627"
+  ),
+  
+  Aneuploidy_score_levels = c(
+    "high-aneuploidy_score" = "#005f73",
+    "low-aneuploidy_score" = "#94d2bd"
   )
+  
 )
+
+
 
 pheatmap(
   consensus_list$gsva,
@@ -134,14 +155,82 @@ annotation_colors = annotation_colors,
 )
 
 
+
 consensus=t(consensus_list$gsva)
 consensus=merge(consensus, sample_info, by = "row.names", all = TRUE )
 
 ```
 
+#### HR+ only
+```{r heatmap_gsva_HRplus, fig.width=15, fig.height=10}
+
+pheatmap(
+  consensus_list$gsva[, rownames(sample_info[sample_info$condition=='HRplus', ]) ],
+  cluster_rows = TRUE,
+  cluster_cols = TRUE,
+  show_rownames = TRUE,
+  show_colnames = TRUE,
+  color = colorRampPalette(c("blue", "white", "red"))(50),
+  main = "consensusTME",
+  annotation_col = annotation_df[ rownames(sample_info[sample_info$condition=='HRplus', ]) , ],
+annotation_colors = annotation_colors,
+)
+```
+
+#### TNBC only
+```{r heatmap_gsva_TNBC, fig.width=15, fig.height=10}
+
+pheatmap(
+  consensus_list$gsva[, rownames(sample_info[sample_info$condition=='TNBC', ]) ],
+  cluster_rows = TRUE,
+  cluster_cols = TRUE,
+  show_rownames = TRUE,
+  show_colnames = TRUE,
+  color = colorRampPalette(c("blue", "white", "red"))(50),
+  main = "consensusTME",
+  annotation_col = annotation_df[ rownames(sample_info[sample_info$condition=='TNBC', ]) , ],
+annotation_colors = annotation_colors,
+)
+```
+
+#### Healthy only
+```{r heatmap_gsva_HLT, fig.width=15, fig.height=10}
+
+pheatmap(
+  consensus_list$gsva[, rownames(sample_info[sample_info$condition=='HLT', ]) ],
+  cluster_rows = TRUE,
+  cluster_cols = TRUE,
+  show_rownames = TRUE,
+  show_colnames = TRUE,
+  color = colorRampPalette(c("blue", "white", "red"))(50),
+  main = "consensusTME",
+  annotation_col = annotation_df[ rownames(sample_info[sample_info$condition=='HLT', ]) , ],
+annotation_colors = annotation_colors,
+)
+
+
+```
+
+
+#### Matrix of cell-type scores
+```{r}
+datatable(
+  t(consensus_list$gsva),
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    lengthMenu = list(c(10, 25, 50, -1),
+                      c(10, 25, 50, "All"))
+  ),
+  rownames = TRUE,
+  caption = "ConsensusTME results"
+)
+```
+
 
 # Correlation between TME enrichment and aneuploidy score (from CaSPeR)
-```{r, fig.width=15, fig.height=15, out.width="100%"}
+```{r scatter_TME_aneuploidy, fig.width=15, fig.height=15, out.width="100%"}
 library(ggplot2)
 library(ggpubr)    # For stat_cor()
 library(patchwork) # For layout
@@ -168,7 +257,7 @@ wrap_plots(plots, ncol = 4)
 
 # Correlation between TME enrichment and CD82 gene expression
 
-```{r, fig.width=15, fig.height=15, out.width="100%"}
+```{r scatter_TME_CD82, fig.width=15, fig.height=15, out.width="100%"}
 
 
 target_var <- "ENSG00000085117"
@@ -194,12 +283,7 @@ wrap_plots(plots, ncol = 4)
 
 # Boxplot of TME enrichment across conditions
 
-```{r, fig.width=15, fig.height=15, out.width="100%"}
-df=consensus
-df=df[!is.na(df$ENSG00000085117), ]
-df$CD82_levels=ifelse( df$ENSG00000085117> median(df$ENSG00000085117), 'high-CD82', 'low-CD82')
-df$aneuploidy_score_levels=ifelse(df$aneuploidy_score> 0.1, 'high-aneuploidy_score', 'low-aneuploidy_score')
-
+```{r boxplot_conditions, fig.width=15, fig.height=15, out.width="100%"}
 
 condition_col <- "condition"
 boxplot_vars = colnames(consensus)[2:20]
@@ -219,8 +303,12 @@ wrap_plots(plots, ncol = 4)
 
 # Boxplot of TME enrichment across CD82 gene levels (stratified by median)
 
-```{r, fig.width=15, fig.height=15, out.width="100%"}
+```{r violinplot_CD82levels, fig.width=15, fig.height=15, out.width="100%"}
 condition_col <- "CD82_levels"
+df=consensus[!is.na(consensus[[condition_col]]), ]
+df[[condition_col]] <- factor(df[[condition_col]], levels = c("low-CD82" , "high-CD82" ))
+
+
 boxplot_vars = colnames(consensus)[2:20]
 
 plots <- lapply(boxplot_vars, function(var) {
@@ -232,26 +320,31 @@ plots <- lapply(boxplot_vars, function(var) {
     theme(legend.position = "none")
 })
 wrap_plots(plots, ncol = 4)
+```
 
+## Boxplot by condition
+```{r boxplot_CD82levels_by_condition, fig.width=15, fig.height=15, out.width="100%"}
 
 plots <- lapply(boxplot_vars, function(var) {
   ggplot(df, aes_string(x =  "condition" , y = var, color = condition_col)) +
     geom_boxplot(outlier.shape = NA, alpha = 0.7) +
     geom_jitter(width = 0.2, alpha = 0.4, size = 0.8) +
     ggtitle(var) +
+   # scale_color_manual(values = annotation_colors$CD82_levels) +
     theme_minimal(base_size = 10) +
     theme(legend.position = "right")
 })
 wrap_plots(plots, ncol = 4)
 
-
-
 ```
 
 # Boxplot of TME enrichment across aneuploidy score levels (stratified by median)
 
-```{r, fig.width=15, fig.height=15, out.width="100%"}
+```{r violinplot_aneuploidy, fig.width=15, fig.height=15, out.width="100%"}
 condition_col <- "aneuploidy_score_levels"
+df=consensus[!is.na(consensus[[condition_col]]), ]
+df[[condition_col]] <- factor(df[[condition_col]], levels = c("low-aneuploidy_score" , "high-aneuploidy_score"  ))
+
 boxplot_vars = colnames(consensus)[2:20]
 
 plots <- lapply(boxplot_vars, function(var) {
@@ -263,13 +356,16 @@ plots <- lapply(boxplot_vars, function(var) {
     theme(legend.position = "none")
 })
 wrap_plots(plots, ncol = 4)
+```
 
-
+## Boxplot by condition
+```{r boxplot_aneuploidy, fig.width=15, fig.height=15, out.width="100%"}
 plots <- lapply(boxplot_vars, function(var) {
   ggplot(df, aes_string(x =  "condition" , y = var, color = condition_col)) +
     geom_boxplot(outlier.shape = NA, alpha = 0.7) +
     geom_jitter(width = 0.2, alpha = 0.4, size = 0.8) +
     ggtitle(var) +
+   # scale_color_manual(values = annotation_colors$Aneuploidy_score_levels) +
     theme_minimal(base_size = 10) +
     theme(legend.position = "right")
 })
@@ -281,7 +377,7 @@ wrap_plots(plots, ncol = 4)
 # Boxplot of TME enrichment across CD82 expression categories (by IHC) in TNBC
 Only TNBC samples are included as only 3 TNBC samples are categorized as high-expression by IHC
 
-```{r, fig.width=15, fig.height=15, out.width="100%"}
+```{r boxplot_by_category, fig.width=15, fig.height=15, out.width="100%"}
 condition_col <-"CATEGORY.1." # "CATEGORY.1." #"CD82_levels"
 boxplot_vars = colnames(consensus)[2:20]
 
@@ -296,6 +392,23 @@ plots <- lapply(boxplot_vars, function(var) {
 wrap_plots(plots, ncol = 4)
 
 
+```
+
+
+## Table of all samples 
+```{r}
+datatable(
+  consensus[, !(names(consensus) %in% c("files", "batches"))],
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    lengthMenu = list(c(10, 25, 50, -1),
+                      c(10, 25, 50, "All"))
+  ),
+  rownames = TRUE,
+  caption = "ConsensusTME results"
+)
 ```
 
 
