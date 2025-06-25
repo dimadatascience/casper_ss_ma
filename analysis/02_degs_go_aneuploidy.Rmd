@@ -12,7 +12,7 @@ editor_options:
 ---
 
 ## Introduction
-The goal of this analysis is to identify which pathways are up- or down-regulated in samples with high or low levels of aneuploidy score computed using CaSPeR pipeline.
+The goal of this analysis is to identify which pathways are up- or down-regulated in samples with high or low levels of Aneuploidy Score (AS) computed using CaSPeR pipeline.
 For each condition (Healthy, HR+, and TNBC), patients are divided into high and low aneuploidy score  groups.
 The following comparisons:
 
@@ -105,7 +105,7 @@ In the distribution plots:
 
 - The red line marks the cutoff point, corresponding to the local minimum used to define the High vs Low groups.
 
-```{r}
+```{r groups}
 sample_info$aneu_group <- NA
 
 # for (cond in unique(sample_info$condition)) {
@@ -149,7 +149,6 @@ datatable(
 
 ```{r score_distribution}
 
-
 plot_hist_with_median <- function(df, group_label) {
   hist(df$aneuploidy_score,
        breaks = 50,
@@ -186,11 +185,11 @@ ggplot(sample_info, aes(x = condition, y = aneuploidy_score, fill = aneu_group))
     fill = "Aneuploidy Group"
   ) +
   theme_minimal()
+
 ```
 
 
 ## Differential expression analysis
-
 
 Differential expression analysis is performed using a custom function, which accounts for batch effect. A batch effect occurs when non-biological factors, like laboratory conditions or instruments used, in an experiment cause changes in the data produced by the experiment.
 Lowly expressed genes are removed to reduce noise. Lowly expressed genes are here considered as:
@@ -258,6 +257,8 @@ mydeseq2 = function(dds, min_reads, sample_info,  min_sample = 5, ...){
 }
 ```
 
+### Number of samples per condition
+
 ```{r de_analysis}
 colnames(dds)= sample_info$samplename
 mreads = round(ncol(dds) / 2)
@@ -310,14 +311,40 @@ plotly::plot_ly(data=tmp, x=~PC1, y=~PC2, text = ~name, color=~condition) %>%
 
 # Contrast 1: HRplus High-AS vs Low-AS
 
+## PCA of selected conditions
+Here is the PCA of selected sample from the first comparison.
+```{r PCA_contrast1}
+
+contrasts=c("HRplus-HighAS_vs_HRplus-LowAS", "TNBC-HighAS_vs_TNBC-LowAS", "HLT-HighAS_vs_HLT-LowAS")
+contrast = contrasts[1]
+
+
+# Define the conditions to compare
+selected_conditions <- unlist(strsplit(contrast, "_vs_"))
+
+# Subset, transform, and plot PCA
+tmp =plotPCA(
+  rld[, rld$condition %in% selected_conditions] |> 
+        {\(x) { x$condition <- droplevels(x$condition); x }}(),
+  intgroup = "condition", returnData=TRUE
+)
+
+percentVar <- attr(tmp, "percentVar")
+
+plotly::plot_ly(data=tmp, x=~PC1, y=~PC2, text = ~name, color=~condition ) %>%
+  layout(
+    xaxis = list(title = paste0("PC1 (", round(percentVar[1] * 100, 1), "% variance)")),
+    yaxis = list(title = paste0("PC2 (", round(percentVar[2] * 100, 1), "% variance)"))
+  )
+
+```
+
+
 ## MA plot and volcano plot
 Genes are annotated as significant or not, to distinguish between genes showing meaningful changes, that is having an adjusted p-value below the threshold considered above and an absolute log2FoldChange greater than the cutoff considered above.
 
 ```{r MA_plot1}
 
-contrasts=unique(all$comparison_n_vs_d)
-contrasts=c("HRplus-HighAS_vs_HRplus-LowAS", "TNBC-HighAS_vs_TNBC-LowAS", "HLT-HighAS_vs_HLT-LowAS")
-contrast = contrasts[1]
 res = all[all$comparison_n_vs_d == contrast, ]
 select = which((res)$padj < qvalue &
                  abs((res)$log2FoldChange) > logfc)
@@ -379,9 +406,9 @@ Meaning of Colors
 
 top20_genes <- final_table %>%
   as.data.frame() %>%
+  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
   arrange(padj) %>%
-  head(20) %>%
-  pull(gene)
+  head(20) 
 
 
 contrasts_df <- as.data.frame(sample_info[, c("type", "condition", "batch"), drop = FALSE])
@@ -405,17 +432,18 @@ df_colors <- list(
 )
 
 
-top20_counts <- all[top20_genes, ]
-data_pos_vs_neg <- assay(rld)[top20_genes, rownames(sample_info[ sample_info$type=='HRplus',]) ]
+top20_counts <- all[top20_genes$gene, ]
+data_pos_vs_neg <- assay(rld)[top20_genes$gene, rownames(sample_info[ sample_info$type=='HRplus',]) ]
 pheatmap(
   t(scale(t(data_pos_vs_neg))),
+  labels_row = top20_genes$gene_symbol,
   cluster_rows = FALSE,
   cluster_cols = TRUE,
   show_rownames = TRUE,
   show_colnames = TRUE,
-  color = colorRampPalette(c("blue", "white", "red"))(50),
+  color = colorRampPalette(c("blue", "white", "red"))(100),
   main = paste0("Top 20 DE Genes: ", contrast), 
-  
+  breaks =  seq( -4, 4, length.out= 101), # seq( -max(abs(data_pos_vs_neg)), max(abs(data_pos_vs_neg)), length.out= 101),
   annotation_col = contrasts_df[contrasts_df$Type=='HRplus',],
   annotation_colors = df_colors,
 )
@@ -425,21 +453,24 @@ pheatmap(
 ```{r heatmap_DEgenes1, fig.width=10, fig.height=10}
 de_genes <- final_table %>%
   as.data.frame() %>%
-  arrange(padj) %>%
-  pull(gene)
+  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
+  arrange(padj)
 
-de_counts <- all[de_genes, ]
-all_data_pos_vs_neg <- assay(rld)[de_genes, rownames(sample_info[ sample_info$type=='HRplus',]) ]
+de_counts <- all[de_genes$gene, ]
+all_data_pos_vs_neg <- assay(rld)[de_genes$gene, rownames(sample_info[ sample_info$type=='HRplus',]) ]
 pheatmap(
   t(scale(t(all_data_pos_vs_neg))),
+  labels_row = de_genes$gene_symbol,
   cluster_rows = TRUE,
   cluster_cols = TRUE,
   show_rownames = FALSE,
   show_colnames = TRUE,
-  color = colorRampPalette(c("blue", "white", "red"))(50),
+  color = colorRampPalette(c("blue", "white", "red"))(100),
+  breaks =  seq( -4, 4, length.out= 101), # seq( -max(abs(data_pos_vs_neg)), max(abs(data_pos_vs_neg)), length.out= 101),
+
   main = paste0( "DE Genes: ", contrast),
   #filename = sprintf("output/heatmap_degs_%s.png", contrast),
-    annotation_col =  contrasts_df[contrasts_df$Type=='HRplus',],
+  annotation_col =  contrasts_df[contrasts_df$Type=='HRplus',],
   annotation_colors = df_colors,
 )
 
@@ -452,7 +483,8 @@ Further analysis is done through gene set enrichment analysis, which does not ex
 GSEA is performed separately on each subontology: biological processes (BP), cellular components (CC) and molecular functions (MF).
 The dot plot below shows the top 10 most enriched GO terms. The size of each dot correlates with the count of differentially expressed genes associated with each GO term. Furthermore, the color of each dot reflects the significance of the enrichment of the respective GO term, highlighting its relative importance.
 
-```{r gene_set_enrichment_analysis1}
+### Biological Processes (BP)
+```{r gene_set_enrichment_analysisBP1}
 
 genelist = res$log2FoldChange
 names(genelist) =  sub("\\..*", "", res$gene)
@@ -476,6 +508,22 @@ if(nrow(gse@result)>0){
   write.table(x=gse@result, file=paste0(folderpath,"output/gse_results/gse.", contrast, ".BP.tsv"), quote=F, row.names=F, sep="\t")
 }
 
+datatable(
+  gse@result,
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    lengthMenu = list(c(10, 25, 50, -1),
+                      c(10, 25, 50, "All"))
+  ),
+  rownames = FALSE,
+  caption = paste0("BP - ", contrast)
+)
+```
+
+### Cellular Components (CC)
+```{r gene_set_enrichment_analysisCC1}
 gse <- gseGO(geneList=sort(genelist, decreasing = T), 
                  ont = "CC", 
                  keyType = "ENSEMBL", 
@@ -494,6 +542,22 @@ if(nrow(gse@result)>0){
   write.table(x=gse@result, file=paste0(folderpath, "output/gse_results/gse.", contrast, ".CC.tsv"), quote=F, row.names=F, sep="\t")
 }
 
+datatable(
+  gse@result,
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    lengthMenu = list(c(10, 25, 50, -1),
+                      c(10, 25, 50, "All"))
+  ),
+  rownames = FALSE,
+  caption = paste0("CC - ", contrast)
+)
+```
+
+### Molecular function (MF)
+```{r gene_set_enrichment_analysisMF1}
 gse <- gseGO(geneList=sort(genelist, decreasing = T), 
                  ont = "MF", 
                  keyType = "ENSEMBL", 
@@ -510,6 +574,19 @@ if(nrow(gse@result)>0){
   print(dotplot(gse, showCategory=10, split=".sign") + facet_grid(.~.sign) + ggtitle( paste0( contrast, " - Molecular function")))
   write.table(x=gse@result, file=paste0(folderpath, "output/gse_results/gse.", contrast, ".MF.tsv"), quote=F, row.names=F, sep="\t")
 }
+
+datatable(
+  gse@result,
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    lengthMenu = list(c(10, 25, 50, -1),
+                      c(10, 25, 50, "All"))
+  ),
+  rownames = FALSE,
+  caption = paste0("MF - ", contrast)
+)
 ```
 
 #### GSEA msigdbr
@@ -524,7 +601,7 @@ m_df<- msigdbr(species = "Homo sapiens",
 fgsea_sets<- m_df %>% split(x = .$ensembl_gene, f = .$gs_name) # arrange genesets
 ```
 
-```{r}
+```{r gsea_hallmarks1}
 degs=res
 
 # ranking of genes based on logFC and pvalue
@@ -597,7 +674,7 @@ For each contrast in our differential expression analysis, we extracted signific
 Pathway visualizations highlight upregulated and downregulated genes in red and blue, respectively, based on log2 fold-change.
 
 
-```{r}
+```{r pathview}
 library(pathview)
 
 for (contrast in contrasts){
@@ -618,12 +695,40 @@ for (contrast in contrasts){
 
 
 # Contrast 2: TNBC High-AS vs Low-AS
+
+## PCA of selected conditions
+Here is the PCA of selected sample from the second comparison.
+```{r PCA_contrast2}
+
+contrast = contrasts[2]
+
+# Define the conditions to compare
+selected_conditions <- unlist(strsplit(contrast, "_vs_"))
+
+# Subset, transform, and plot PCA
+tmp =plotPCA(
+  rld[, rld$condition %in% selected_conditions] |> 
+        {\(x) { x$condition <- droplevels(x$condition); x }}(),
+  intgroup = "condition", returnData=TRUE
+)
+
+percentVar <- attr(tmp, "percentVar")
+plotly::plot_ly(data=tmp, x=~PC1, y=~PC2, text = ~name, color=~condition ) %>%
+  layout(
+    xaxis = list(title = paste0("PC1 (", round(percentVar[1] * 100, 1), "% variance)")),
+    yaxis = list(title = paste0("PC2 (", round(percentVar[2] * 100, 1), "% variance)"))
+  )
+
+```
+
+
+
 ## MA plot and volcano plot
 Genes are annotated as significant or not, to distinguish between genes showing meaningful changes, that is having an adjusted p-value below the threshold considered above and an absolute log2FoldChange greater than the cutoff considered above.
 
 ```{r MA_plot2}
 
-contrast = contrasts[2]
+
 res = all[all$comparison_n_vs_d == contrast, ]
 select = which((res)$padj < qvalue &
                  abs((res)$log2FoldChange) > logfc)
@@ -683,21 +788,22 @@ Meaning of Colors
 
 top20_genes <- final_table %>%
   as.data.frame() %>%
+  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
   arrange(padj) %>%
-  head(20) %>%
-  pull(gene)
+  head(20)
 
-top20_counts <- all[top20_genes, ]
-data_pos_vs_neg <- assay(rld)[top20_genes, rownames(sample_info[ sample_info$type=='TNBC',]) ]
+top20_counts <- all[top20_genes$gene, ]
+data_pos_vs_neg <- assay(rld)[top20_genes$gene, rownames(sample_info[ sample_info$type=='TNBC',]) ]
 pheatmap(
   t(scale(t(data_pos_vs_neg))),
+  labels_row = top20_genes$gene_symbol,
   cluster_rows = FALSE,
   cluster_cols = TRUE,
   show_rownames = TRUE,
   show_colnames = TRUE,
-  color = colorRampPalette(c("blue", "white", "red"))(50),
+  color = colorRampPalette(c("blue", "white", "red"))(100),
+  breaks =  seq( -4, 4, length.out= 101), # seq( -max(abs(data_pos_vs_neg)), max(abs(data_pos_vs_neg)), length.out= 101),
   main = paste0("Top 20 DE Genes: ", contrast), 
-  
   annotation_col = contrasts_df[contrasts_df$Type=='TNBC',],
   annotation_colors = df_colors,
 )
@@ -708,22 +814,24 @@ pheatmap(
 ```{r heatmap_DEgenes2, fig.width=10, fig.height=10}
 de_genes <- final_table %>%
   as.data.frame() %>%
-  arrange(padj) %>%
-  pull(gene)
+  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
+  arrange(padj)
 
-de_counts <- all[de_genes, ]
-all_data_pos_vs_neg <- assay(rld)[de_genes, rownames(sample_info[ sample_info$type=='TNBC',]) ]
+de_counts <- all[de_genes$gene, ]
+all_data_pos_vs_neg <- assay(rld)[de_genes$gene, rownames(sample_info[ sample_info$type=='TNBC',]) ]
 pheatmap(
   t(scale(t(all_data_pos_vs_neg))),
+  labels_row = de_genes$gene_symbol,
   cluster_rows = TRUE,
   cluster_cols = TRUE,
   show_rownames = FALSE,
   show_colnames = TRUE,
-  color = colorRampPalette(c("blue", "white", "red"))(50),
+  color = colorRampPalette(c("blue", "white", "red"))(100),
+  breaks =  seq( -4, 4, length.out= 101), # seq( -max(abs(data_pos_vs_neg)), max(abs(data_pos_vs_neg)), length.out= 101),
   main = paste0( "DE Genes: ", contrast),
   #filename = sprintf("output/heatmap_degs_%s.png", contrast),
-    annotation_col = contrasts_df[contrasts_df$Type=='TNBC',],
-  annotation_colors = df_colors,
+  annotation_col = contrasts_df[contrasts_df$Type=='TNBC',],
+  annotation_colors = df_colors
 )
 
 ```
@@ -732,7 +840,8 @@ pheatmap(
 
 ## Gene set enrichment analysis
 
-```{r gene_set_enrichment_analysis2}
+### Biological Processes (BP)
+```{r gene_set_enrichment_analysisBP2}
 
 genelist = res$log2FoldChange
 names(genelist) =  sub("\\..*", "", res$gene)
@@ -754,10 +863,24 @@ if(nrow(gse@result)>0){
   
   print(dotplot(gse, showCategory=10, split=".sign") + facet_grid(.~.sign) + ggtitle(paste0( contrast, " - biological processes")))
   write.table(x=gse@result, file=paste0(folderpath,"output/gse_results/gse.", contrast, ".BP.tsv"), quote=F, row.names=F, sep="\t")
-} else {
-  
 }
 
+datatable(
+  gse@result,
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    lengthMenu = list(c(10, 25, 50, -1),
+                      c(10, 25, 50, "All"))
+  ),
+  rownames = FALSE,
+  caption = paste0("BP - ", contrast)
+)
+```
+
+### Cellular Components (CC)
+```{r gene_set_enrichment_analysisCC2}
 gse <- gseGO(geneList=sort(genelist, decreasing = T), 
                  ont = "CC", 
                  keyType = "ENSEMBL", 
@@ -776,6 +899,22 @@ if(nrow(gse@result)>0){
   write.table(x=gse@result, file=paste0(folderpath, "output/gse_results/gse.", contrast, ".CC.tsv"), quote=F, row.names=F, sep="\t")
 }
 
+datatable(
+  gse@result,
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    lengthMenu = list(c(10, 25, 50, -1),
+                      c(10, 25, 50, "All"))
+  ),
+  rownames = FALSE,
+  caption = paste0("CC - ", contrast)
+)
+```
+
+### Molecular function (MF)
+```{r gene_set_enrichment_analysisMF2}
 gse <- gseGO(geneList=sort(genelist, decreasing = T), 
                  ont = "MF", 
                  keyType = "ENSEMBL", 
@@ -792,11 +931,24 @@ if(nrow(gse@result)>0){
   print(dotplot(gse, showCategory=10, split=".sign") + facet_grid(.~.sign) + ggtitle( paste0( contrast, " - Molecular function")))
   write.table(x=gse@result, file=paste0(folderpath, "output/gse_results/gse.", contrast, ".MF.tsv"), quote=F, row.names=F, sep="\t")
 }
+
+datatable(
+  gse@result,
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    lengthMenu = list(c(10, 25, 50, -1),
+                      c(10, 25, 50, "All"))
+  ),
+  rownames = FALSE,
+  caption = paste0("MF - ", contrast)
+)
 ```
 
 
 ## GSEA msigdb
-```{r}
+```{r gsea_hallmarks2}
 degs=res
 
 # ranking of genes based on logFC and pvalue
@@ -864,12 +1016,39 @@ write.table(fgseaRes, sprintf( '%s/output/gse_results/GSEA_table_%s.txt', folder
 
 # Contrast 3: Healthy High-AS vs Low-AS
 
+## PCA of selected conditions
+Here is the PCA of selected sample from the third comparison.
+```{r PCA_contrast3}
+
+contrast = contrasts[3]
+
+# Define the conditions to compare
+selected_conditions <- unlist(strsplit(contrast, "_vs_"))
+
+# Subset, transform, and plot PCA
+tmp =plotPCA(
+  rld[, rld$condition %in% selected_conditions] |> 
+        {\(x) { x$condition <- droplevels(x$condition); x }}(),
+  intgroup = "condition", returnData=TRUE
+)
+
+percentVar <- attr(tmp, "percentVar")
+plotly::plot_ly(data=tmp, x=~PC1, y=~PC2, text = ~name, color=~condition ) %>%
+  layout(
+    xaxis = list(title = paste0("PC1 (", round(percentVar[1] * 100, 1), "% variance)")),
+    yaxis = list(title = paste0("PC2 (", round(percentVar[2] * 100, 1), "% variance)"))
+  )
+
+```
+
+
+
 ## MA plot and volcano plot
 Genes are annotated as significant or not, to distinguish between genes showing meaningful changes, that is having an adjusted p-value below the threshold considered above and an absolute log2FoldChange greater than the cutoff considered above.
 
 ```{r MA_plot3}
 
-contrast = contrasts[3]
+
 res = all[all$comparison_n_vs_d == contrast, ]
 select = which((res)$padj < qvalue &
                  abs((res)$log2FoldChange) > logfc)
@@ -930,19 +1109,22 @@ Meaning of Colors
 
 top20_genes <- final_table %>%
   as.data.frame() %>%
+  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
   arrange(padj) %>%
-  head(20) %>%
-  pull(gene)
+  head(20)
 
-top20_counts <- all[top20_genes, ]
-data_pos_vs_neg <- assay(rld)[top20_genes, rownames(sample_info[ sample_info$type=='HLT',]) ]
+top20_counts <- all[top20_genes$gene, ]
+data_pos_vs_neg <- assay(rld)[top20_genes$gene, rownames(sample_info[ sample_info$type=='HLT',]) ]
 pheatmap(
   t(scale(t(data_pos_vs_neg))),
+  labels_row = top20_genes$gene_symbol,
   cluster_rows = FALSE,
   cluster_cols = TRUE,
   show_rownames = TRUE,
   show_colnames = TRUE,
-  color = colorRampPalette(c("blue", "white", "red"))(50),
+  color = colorRampPalette(c("blue", "white", "red"))(100),
+  breaks =  seq( -4, 4, length.out= 101), # seq( -max(abs(data_pos_vs_neg)), max(abs(data_pos_vs_neg)), length.out= 101),
+
   main = paste0("Top 20 DE Genes: ", contrast), 
   
   annotation_col = contrasts_df[contrasts_df$Type=='HLT',],
@@ -954,21 +1136,23 @@ pheatmap(
 ```{r heatmap_DEgenes3, fig.width=10, fig.height=10}
 de_genes <- final_table %>%
   as.data.frame() %>%
-  arrange(padj) %>%
-  pull(gene)
+  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
+  arrange(padj) 
 
-de_counts <- all[de_genes, ]
-all_data_pos_vs_neg <- assay(rld)[de_genes, rownames(sample_info[ sample_info$type=='HLT',]) ]
+de_counts <- all[de_genes$gene, ]
+all_data_pos_vs_neg <- assay(rld)[de_genes$gene, rownames(sample_info[ sample_info$type=='HLT',]) ]
 pheatmap(
   t(scale(t(all_data_pos_vs_neg))),
+  labels_row = de_genes$gene_symbol,
   cluster_rows = TRUE,
   cluster_cols = TRUE,
   show_rownames = FALSE,
   show_colnames = TRUE,
-  color = colorRampPalette(c("blue", "white", "red"))(50),
+  color = colorRampPalette(c("blue", "white", "red"))(100),
+  breaks =  seq( -4, 4, length.out= 101), # seq( -max(abs(data_pos_vs_neg)), max(abs(data_pos_vs_neg)), length.out= 101),
   main = paste0( "DE Genes: ", contrast),
   #filename = sprintf("output/heatmap_degs_%s.png", contrast),
-    annotation_col = contrasts_df[contrasts_df$Type=='HLT',],
+  annotation_col = contrasts_df[contrasts_df$Type=='HLT',],
   annotation_colors = df_colors,
 )
 
@@ -976,7 +1160,8 @@ pheatmap(
 
 ## Gene set enrichment analysis
 
-```{r gene_set_enrichment_analysis3}
+### Biological Processes (BP)
+```{r gene_set_enrichment_analysisBP3}
 
 genelist = res$log2FoldChange
 names(genelist) =  sub("\\..*", "", res$gene)
@@ -996,10 +1181,26 @@ if(nrow(gse@result)>0){
   print(dotplot(gse, showCategory=10, split=".sign") + facet_grid(.~.sign) + ggtitle(paste0( contrast, " - biological processes") ))
   dev.off()
   
-  dotplot(gse, showCategory=10, split=".sign") + facet_grid(.~.sign) + ggtitle(paste0( contrast, " - biological processes"))
+  print(dotplot(gse, showCategory=10, split=".sign") + facet_grid(.~.sign) + ggtitle(paste0( contrast, " - biological processes")))
   write.table(x=gse@result, file=paste0(folderpath,"output/gse_results/gse.", contrast, ".BP.tsv"), quote=F, row.names=F, sep="\t")
 }
 
+datatable(
+  gse@result,
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    lengthMenu = list(c(10, 25, 50, -1),
+                      c(10, 25, 50, "All"))
+  ),
+  rownames = FALSE,
+  caption = paste0("BP - ", contrast)
+)
+```
+
+### Cellular Components (CC)
+```{r gene_set_enrichment_analysisCC3}
 gse <- gseGO(geneList=sort(genelist, decreasing = T), 
                  ont = "CC", 
                  keyType = "ENSEMBL", 
@@ -1018,6 +1219,22 @@ if(nrow(gse@result)>0){
   write.table(x=gse@result, file=paste0(folderpath, "output/gse_results/gse.", contrast, ".CC.tsv"), quote=F, row.names=F, sep="\t")
 }
 
+datatable(
+  gse@result,
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    lengthMenu = list(c(10, 25, 50, -1),
+                      c(10, 25, 50, "All"))
+  ),
+  rownames = FALSE,
+  caption = paste0("CC - ", contrast)
+)
+```
+
+### Molecular function (MF)
+```{r gene_set_enrichment_analysisMF3}
 gse <- gseGO(geneList=sort(genelist, decreasing = T), 
                  ont = "MF", 
                  keyType = "ENSEMBL", 
@@ -1034,11 +1251,24 @@ if(nrow(gse@result)>0){
   print(dotplot(gse, showCategory=10, split=".sign") + facet_grid(.~.sign) + ggtitle( paste0( contrast, " - Molecular function")))
   write.table(x=gse@result, file=paste0(folderpath, "output/gse_results/gse.", contrast, ".MF.tsv"), quote=F, row.names=F, sep="\t")
 }
+
+datatable(
+  gse@result,
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Blfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    lengthMenu = list(c(10, 25, 50, -1),
+                      c(10, 25, 50, "All"))
+  ),
+  rownames = FALSE,
+  caption = paste0("MF - ", contrast)
+)
 ```
 
 ### GSEA msigdb
 
-```{r}
+```{r gsea_hallmarks3}
 degs=res
 
 # ranking of genes based on logFC and pvalue
@@ -1105,7 +1335,7 @@ write.table(fgseaRes, sprintf( '%s/output/gse_results/GSEA_table_%s.txt', folder
 
 # Common pathways
 ### Biological Processes Pathways
-```{r}
+```{r bp}
 ## import pathways and compare
 ont='BP'
 # res1 <- read.table(sprintf("%s/output/gse_results/gse.%s.%s.tsv", folderpath, contrasts[1],  ont ), sep = "\t", header = TRUE)
@@ -1156,7 +1386,7 @@ grid::grid.draw(venn.plot)
 
 
 ### Cellular Components Pathways
-```{r}
+```{r cc}
 ## import pathways and compare
 ont='CC'
 res1 <- read.table(sprintf("%s/output/gse_results/gse.%s.%s.tsv", folderpath, contrasts[1],  ont ), sep = "\t", header = TRUE)
@@ -1202,14 +1432,14 @@ grid::grid.draw(venn.plot)
 ```
 
 ### Molecular Functions Pathways
-```{r}
+```{r mf}
 ## import pathways and compare
 ont='MF'
-# res1 <- read.table(sprintf("%s/output/gse_results/gse.%s.%s.tsv", folderpath, contrasts[1],  ont ), sep = "\t", header = TRUE)
+res1 <- read.table(sprintf("%s/output/gse_results/gse.%s.%s.tsv", folderpath, contrasts[1],  ont ), sep = "\t", header = TRUE)
 res2 <- read.table(sprintf("%s/output/gse_results/gse.%s.%s.tsv", folderpath, contrasts[2], ont ), sep = "\t",header = TRUE)
 res3 <- read.table(sprintf("%s/output/gse_results/gse.%s.%s.tsv", folderpath, contrasts[3], ont ), sep = "\t", header = TRUE)
 
-# paths1 <- unique(res1$ID)
+paths1 <- unique(res1$ID)
 paths2 <- unique(res2$ID)
 paths3 <- unique(res3$ID)
 
@@ -1234,10 +1464,10 @@ common_paths <- Reduce(intersect, list(paths1, paths2, paths3))
 ```{r venn3, fig.width=6, fig.height=6, echo=FALSE, message=FALSE}
 
 venn.plot <- venn.diagram(
-  x = list( # HRplus_high_vs_low = paths1,
+  x = list( HRplus_high_vs_low = paths1,
             TNBC_high_vs_low = paths2, HLT_high_vs_low = paths3),
   filename = NULL,
-  fill = c( # "salmon",
+  fill = c(  "salmon",
             "skyblue", "lightgreen"),
   alpha = 0.6,
   cat.cex = 1.2,
@@ -1306,8 +1536,6 @@ legend(x='top',legend = "* : pvalue <= 0.05",
 ```
 
 
-
-
 # Table of all genes
 
 ```{r all_genes_table}
@@ -1327,163 +1555,3 @@ write.table(x=all[(all$comparison_n_vs_d %in% contrasts) ,], file=paste0(folderp
 
 ```
 
-
-
-
-
-<!-- ## WGCNA analysis -->
-
-<!-- The idea behind WGCNA analysis is to identify genes with similar expression patterns, so genes that are co-expressed, that can be functionally associated. -->
-<!-- Starting from gene expression data, like counts matrix from RNA-seq, a weighted correlation matrix is constructed and then this allow to identify modules, clusters of genes with similar expression patterns. Furthermore, these modules can be investigated to identify driver genes or to find correlation with phenotype. -->
-<!-- WGCNA analysis is designed to be unsupervised method, so genes do not have to be filtered based on differential expression analysis. Genes with low counts should be removed from counts matrix; counts should be normalized and batch effect removed before running analysis. -->
-<!-- With this analysis, we can identify genes or cluster of genes significantly associated with HPV+ individuals. -->
-
-<!-- ```{r} -->
-<!-- library(CorLevelPlot) -->
-<!-- # Correct batch effect -->
-<!-- dds_subset_bc <- dds_subset -->
-<!-- assay(dds_subset_bc) = limma::removeBatchEffect(assay(vst(dds_subset_bc)),dds_subset_bc$batch) -->
-<!-- final_counts_bc <- assay(dds_subset_bc) -->
-
-<!-- # This function iteratively identifies samples and genes with too many missing entries and genes with zero variance, which are considered to be outlier. By default, the minimum number of good samples and good genes, with no missing value, is set to 4. -->
-<!-- # The input data are required to have samples on the rows and genes on the columns, that is the transposition of final_counts matrix. -->
-<!-- gsg_bc <- goodSamplesGenes(t(final_counts_bc)) -->
-<!-- #The object gsg_bc holds logical vectors -->
-<!-- summary(gsg_bc) -->
-
-<!-- # To see if the function identified any possible outlier, the allOK vector needs to be evaluated. If the allOK object returns true, there are no outliers present. If it doesn’t return true, we need to filter out the outliers manually. -->
-<!-- gsg_bc$allOK -->
-
-<!-- table(gsg_bc$goodGenes) # 4323 genes are considered as outliers -->
-<!-- table(gsg_bc$goodSamples) # no sample is considered as outlier -->
-
-<!-- # Remove genes that are detected as outliers -->
-<!-- wgcna_data_bc <- final_counts_bc[gsg_bc$goodGenes == TRUE,] -->
-
-<!-- # To be sure that there are no outliers among samples, let's do a PCA -->
-<!-- pca <- prcomp(t(wgcna_data_bc)) -->
-<!-- pca.dat <- pca$x -->
-<!-- #Obtain the variance from standard deviation  -->
-<!-- pca.var <- pca$sdev^2 #standard deviations of the principal components -->
-<!-- #Obtain the percentage of the variance -->
-<!-- pca.var.percent <- round(pca.var/sum(pca.var)*100, digits = 2) -->
-<!-- pca.dat <- as.data.frame(pca.dat) -->
-<!-- # Plot the first two principal components -->
-<!-- ggplot(pca.dat, aes(PC1, PC2)) + -->
-<!--   geom_point() + -->
-<!--   geom_text(label = rownames(pca.dat)) + -->
-<!--   labs(x = paste0('PC1: ', pca.var.percent[1], ' %'), #the percentage of variance explained by PC1 -->
-<!--        y = paste0('PC2: ', pca.var.percent[2], ' %')) #the percentage of variance explained by PC2 -->
-<!-- # No outliers are detected, but we see a clear separation between samples coming from HPV+ patients and others. -->
-
-
-<!-- # Remove all genes with counts < 11 (half of the patients) in more than 75% of samples (22*0.75=16.5), suggested by WGCNA package FAQ -->
-<!-- #dds_subset_bc_75 <-dds_subset_bc[rowSums(counts(dds_subset_bc) >= 11) >= 17,] -->
-<!-- #nrow(dds_subset_bc_75) # 308 genes are kept -->
-<!-- #final_counts_bc_75t <- t(assay(dds_subset_bc_75)) -->
-
-<!-- #Here we perform pre-filtering to keep only rows that have a count of at least 10 for a minimal number of samples. The count of 10 is a reasonable choice for bulk RNA-seq. A recommendation for the minimal number of samples is to specify the smallest group size -->
-<!-- smallestGroupSize <- 6 -->
-<!-- keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize -->
-<!-- dds_subset_bc_filtered <- dds_subset_bc[keep,] -->
-<!-- nrow(dds_subset_bc_filtered) # 16633 genes are kept -->
-<!-- final_counts_bc_filtered <- t(assay(dds_subset_bc_filtered)) -->
-
-<!-- # Network Construction  --------------------------------------------------- -->
-<!-- # Choose a set of soft-thresholding powers -->
-<!-- power <- c(c(1:10), seq(from = 12, to = 50, by = 2)) -->
-
-<!-- # Call the network topology analysis function -->
-<!-- sft <- pickSoftThreshold(final_counts_bc_filtered, -->
-<!--                   powerVector = power, -->
-<!--                   networkType = "signed", -->
-<!--                   verbose = 5) -->
-
-
-<!-- sft.data <- sft$fitIndices -->
-
-<!-- # visualization to pick power -->
-
-<!-- a1 <- ggplot(sft.data, aes(Power, SFT.R.sq, label = Power)) + -->
-<!--   geom_point() + -->
-<!--   geom_text(nudge_y = 0.1) + -->
-<!--   geom_hline(yintercept = 0.8, color = 'red') + -->
-<!--   labs(x = 'Power', y = 'Scale free topology model fit, signed R^2') + -->
-<!--   theme_classic() -->
-
-
-<!-- a2 <- ggplot(sft.data, aes(Power, mean.k., label = Power)) + -->
-<!--   geom_point() + -->
-<!--   geom_text(nudge_y = 0.1) + -->
-<!--   labs(x = 'Power', y = 'Mean Connectivity') + -->
-<!--   theme_classic() -->
-
-
-<!-- grid.arrange(a1, a2, nrow = 2) -->
-<!-- # convert matrix to numeric -->
-<!-- final_counts_bc_filtered[] <- sapply(final_counts_bc_filtered, as.numeric) -->
-
-<!-- soft_power <- 14 -->
-<!-- temp_cor <- cor -->
-<!-- cor <- WGCNA::cor -->
-
-<!-- # memory estimate w.r.t blocksize -->
-<!-- bwnet <- blockwiseModules(final_counts_bc_filtered, -->
-<!--                  maxBlockSize = 5000, # What size chunks (how many genes) the calculations should be run in -->
-<!--                  TOMType = "signed", # topological overlap matrix -->
-<!--                  power = soft_power, # soft threshold for network construction -->
-<!--                  numericLabels = FALSE, # Let's use colors instead of numbers for module labels -->
-<!--                  randomSeed = 1234, # there's some randomness associated with this calculation, so we should set a seed -->
-<!--                  verbose = 3) -->
-
-
-<!-- cor <- temp_cor -->
-
-<!-- #The bwnet object has many parts, storing a lot of information.  -->
-<!-- #In bwnet we have a data frame of eigengene module data for each sample in the MEs slot. These represent the collapsed, combined, and normalized expression of the genes that make up each module. -->
-<!-- # Module Eigengenes --------------------------------------------------------- -->
-<!-- module_eigengenes <- bwnet$MEs -->
-
-<!-- # Print out a preview -->
-<!-- head(module_eigengenes) -->
-
-<!-- # get number of genes for each module -->
-<!-- table(bwnet$colors) -->
-
-<!-- # Create the design matrix from the `condition` variable -->
-<!-- des_mat <- model.matrix(~ sample_info$condition) -->
-<!-- # lmFit() needs a transposed version of the matrix -->
-<!-- fit <- limma::lmFit(t(module_eigengenes), design = des_mat) -->
-<!-- # Apply empirical Bayes to smooth standard errors -->
-<!-- fit <- limma::eBayes(fit) -->
-<!-- # Apply multiple testing correction and obtain stats -->
-<!-- stats_df <- limma::topTable(fit, number = ncol(module_eigengenes)) %>% -->
-<!--   tibble::rownames_to_column("module") -->
-<!-- head(stats_df) -->
-
-<!-- #Binarize condition column -->
-<!-- sample_info_df <- as.data.frame(sample_info) -->
-<!-- traits <- sample_info_df %>% -->
-<!--   select(2) -->
-<!-- traits$condition_binary <- 0 -->
-<!-- traits$condition_binary[traits$condition == "HPVpos"] <- 1 -->
-<!-- nSamples <- nrow(final_counts_bc_filtered) -->
-<!-- nGenes <- ncol(final_counts_bc_filtered) -->
-<!-- #Compute Pearson correlation between modules and condition -->
-<!-- module.trait.corr <- cor(module_eigengenes, traits, use = 'p') -->
-<!-- #Compute p-value of the Pearson correlation computed above -->
-<!-- module.trait.corr.pvals <- corPvalueStudent(module.trait.corr, nSamples) -->
-<!-- heatmap.data <- merge(module_eigengenes, traits, by = 'row.names') -->
-<!-- head(heatmap.data) -->
-<!-- rownames(heatmap.data) <- heatmap.data$Row.names -->
-<!-- heatmap.data <- subset(heatmap.data, select = -c(Row.names,condition)) -->
-<!-- CorLevelPlot(heatmap.data, -->
-<!--               x = names(heatmap.data)[44], -->
-<!--               y = names(heatmap.data)[1:43], -->
-<!--               col = c("blue1", "skyblue", "white", "pink", "red")) -->
-<!-- #MEtan(0.86 correlation), MElightcyan (0.81 correlation), MEdarkgrey (0.78 correlation) -->
-<!-- module.gene.mapping <- as.data.frame(bwnet$colors) -->
-<!-- module.gene.mapping %>%  -->
-<!--   filter(`bwnet$colors` == 'tan') %>%  -->
-<!--   rownames() -->
-<!-- ``` -->
