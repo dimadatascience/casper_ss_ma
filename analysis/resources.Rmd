@@ -6,6 +6,7 @@ date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   workflowr::wflow_html:
     toc_depth: 4
+    code_folding: hide
 editor_options:
   chunk_output_type: console
 ---
@@ -21,9 +22,16 @@ knitr::opts_chunk$set(echo       = FALSE,
                       fig.height = 9)
 ```
 
-
+### Figures
 ```{r} 
- xfun::embed_dir('/Volumes/scratch/DIMA/piva/casper_ss_ma/docs/figure', text = 'Download figures (ZIP archive)')
+xfun::embed_dir('/Volumes/scratch/DIMA/piva/casper_ss_ma/docs/figure', text = 'Download figures (ZIP archive)')
+
+```
+
+### Raw data
+```{r}
+xfun::embed_file('/Volumes/scratch/DIMA/piva/casper_ss_ma/data/raw_counts.csv', text = 'Download raw counts matrix')
+
 ```
 
 
