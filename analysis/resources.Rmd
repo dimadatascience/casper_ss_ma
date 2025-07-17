@@ -28,10 +28,4 @@ xfun::embed_dir('/Volumes/scratch/DIMA/piva/casper_ss_ma/docs/figure', text = 'D
 
 ```
 
-### Raw data
-```{r}
-xfun::embed_file('/Volumes/scratch/DIMA/piva/casper_ss_ma/data/raw_counts.csv', text = 'Download raw counts matrix')
-
-```
-
 
