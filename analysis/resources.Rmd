@@ -24,7 +24,7 @@ knitr::opts_chunk$set(echo       = FALSE,
 
 ### Figures
 ```{r} 
-xfun::embed_dir('/Volumes/scratch/DIMA/piva/casper_ss_ma/docs/figure', text = 'Download figures (ZIP archive)')
+xfun::embed_dir('/hpcnfs/scratch/SS/zhan/casper_ss_ma/docs/figure', text = 'Download figures (ZIP archive)')
 
 ```
 
