@@ -303,7 +303,7 @@ ggplot(expr_aneuploidy, aes(x = x, y = ENSG00000085117, color = type)) +
 ```{r cd82_correlation_tumor_vs_normal}
 tmp = expr_aneuploidy
 tmp$tumor = "yes"
-tmp[tmp$type!="HLT","tumor"]= "no"
+tmp[tmp$type=="HLT","tumor"]= "no"
 ggplot(tmp, aes(x = x, y = ENSG00000085117, color=tumor)) +
   geom_point() +  # Scatter plot
   stat_smooth(method = "lm", se = FALSE) +  # Add linear fit without confidence interval
@@ -329,7 +329,7 @@ expr_aneuploidy = merge(expr_aneuploidy, trop2_expression, by.x=1, by.y=0)
 
 tmp = expr_aneuploidy
 tmp$tumor = "yes"
-tmp[tmp$type!="HLT","tumor"]= "no"
+tmp[tmp$type=="HLT","tumor"]= "no"
 ggplot(tmp, aes(x = x, y = ENSG00000184292, color = tumor)) +
   geom_point() +  # Scatter plot
   stat_smooth(method = "lm", se = FALSE) +  # Add linear fit without confidence interval
