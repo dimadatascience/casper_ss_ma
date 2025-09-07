@@ -285,7 +285,7 @@ mydatatable(tmp)
 
 # Correlation aneuplodity and CD82 expression
 
-```{r}
+```{r cd82_correlation_splitted_by_type}
 gene_id = annotation$Gene[annotation$GeneSymbol == "CD82"]
 cd82_expression = t(data[gene_id, ])
 expr_aneuploidy = merge(aneuploidy, cd82_expression, by.y=0, by.x=1)
@@ -300,8 +300,11 @@ ggplot(expr_aneuploidy, aes(x = x, y = ENSG00000085117, color = type)) +
        y = "CD82 expression")
 ```
 
-```{r}
-ggplot(expr_aneuploidy, aes(x = x, y = ENSG00000085117)) +
+```{r cd82_correlation_tumor_vs_normal}
+tmp = expr_aneuploidy
+tmp$tumor = "yes"
+tmp[tmp$type!="HLT","tumor"]= "no"
+ggplot(tmp, aes(x = x, y = ENSG00000085117, color=tumor)) +
   geom_point() +  # Scatter plot
   stat_smooth(method = "lm", se = FALSE) +  # Add linear fit without confidence interval
   stat_cor(
@@ -315,6 +318,50 @@ ggplot(expr_aneuploidy, aes(x = x, y = ENSG00000085117)) +
     title = "",
     x = "Aneuploidy score",
     y = "CD82 expression"
+  )
+```
+
+```{r trop2_correlation_tumor_vs_normal}
+
+gene_id = annotation$Gene[annotation$GeneSymbol == "TACSTD2"]
+trop2_expression = t(data[gene_id, ])
+expr_aneuploidy = merge(expr_aneuploidy, trop2_expression, by.x=1, by.y=0)
+
+tmp = expr_aneuploidy
+tmp$tumor = "yes"
+tmp[tmp$type!="HLT","tumor"]= "no"
+ggplot(tmp, aes(x = x, y = ENSG00000184292, color = tumor)) +
+  geom_point() +  # Scatter plot
+  stat_smooth(method = "lm", se = FALSE) +  # Add linear fit without confidence interval
+  stat_cor(
+    method = "spearman",
+    aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+    label.x.npc = "left",
+    label.y.npc = "top"
+  ) +
+  theme_minimal() +
+  labs(
+    title = "",
+    x = "Aneuploidy score",
+    y = "TROP2 expression"
+  )
+```
+
+```{r trop2_cd82_correlation}
+ggplot(tmp, aes(x = ENSG00000085117, y = ENSG00000184292, color = type)) +
+  geom_point() +  # Scatter plot
+  stat_smooth(method = "lm", se = FALSE) +  # Add linear fit without confidence interval
+  stat_cor(
+    method = "spearman",
+    aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+    label.x.npc = "left",
+    label.y.npc = "top"
+  ) +
+  theme_minimal() +
+  labs(
+    title = "",
+    x = "CD82 expression",
+    y = "TROP2 expression"
   )
 ```
 
