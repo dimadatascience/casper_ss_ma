@@ -181,9 +181,15 @@ Below we show the fraction of genome affected by either CNV gain/loss/loh
 # tmp = rbind(gain.final, loh.final, loss.final)
 tmp = rbind(gain.final, loss.final)
 tmp = aggregate(tmp$width, list(tmp$ID), sum)
+original = tmp$Group.1
+tmp$Group.1 = sub("TROP", "TROP_", tmp$Group.1)
+tmp$Group.1 = sub("HLT", "HLT_", tmp$Group.1)
+tmp$Group.1 = sub("TNBC", "TNBC_", tmp$Group.1)
+tmp$Group.1 = sub("__", "_", tmp$Group.1)
 tmp$x = tmp$x/ sum(cytoband[cytoband$V4=="q", "V3"])
 tmp$type = sub("^[^_]+_(.*)_[^_]+$", "\\1", tmp$Group.1)
 aneuploidy = tmp
+aneuploidy$Group.1 = original
 ```
 
 ```{r boxplot_comparative_cnv_across_condition}
@@ -222,6 +228,10 @@ cnv_list = list(gain=gain.final, loss=loss.final)
 for(name in names(cnv_list)){
   tmp = cnv_list[[name]]
   tmp = aggregate(tmp$width, list(tmp$ID), sum)
+  tmp$Group.1 = sub("TROP", "TROP_", tmp$Group.1)
+  tmp$Group.1 = sub("HLT", "HLT_", tmp$Group.1)
+  tmp$Group.1 = sub("TNBC", "TNBC_", tmp$Group.1)
+  tmp$Group.1 = sub("__", "_", tmp$Group.1)
   tmp$x = tmp$x/ sum(cytoband[cytoband$V4=="q", "V3"])
   tmp$type = sub("^[^_]+_(.*)_[^_]+$", "\\1", tmp$Group.1)
   tmp$group = name
