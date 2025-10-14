@@ -400,7 +400,10 @@ Meaning of Colors
 top20_genes <- final_table %>%
   as.data.frame() %>%
   filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
-  arrange(padj) %>%
+  arrange(padj) 
+
+top20_genes=top20_genes[top20_genes$gene_symbol!='',]
+top20_genes <- top20_genes %>%
   head(20) 
 
 
@@ -762,9 +765,12 @@ Meaning of Colors
 
 top20_genes <- final_table %>%
   as.data.frame() %>%
-  filter(!is.na(gene_symbol)) %>%
-  arrange(padj) %>%
-  head(20)
+  filter(!is.na(gene_symbol)) %>% ## to have filter gene symbol
+  arrange(padj) 
+
+top20_genes=top20_genes[top20_genes$gene_symbol!='',]
+top20_genes <- top20_genes %>%
+  head(20) 
 
 
 top20_counts <- all[top20_genes$gene, ]
