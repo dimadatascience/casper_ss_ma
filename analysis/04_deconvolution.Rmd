@@ -22,6 +22,7 @@ library(RSQLite)
 library(ConsensusTME)
 library(pheatmap)
 library("DT")
+library("DESeq2")
 
 # ConsensusTME::cancerAll # BRCA
 ```
@@ -36,19 +37,24 @@ It is important to note that these scores allow for comparisons between samples,
 folderpath='/Volumes/scratch/DIMA/piva/casper_ss_ma/'
 
 # sample_info table
-sample_info = read.table(paste0(folderpath, "/data/samples_metadata.csv"), header=T, sep = ',', row.names = 1)
+sample_info = read.table(paste0(folderpath, "/data/sampleTable_HLT_HRplus_TNBC_TROP.csv"), header=T, sep = ',', row.names = 1)
 rownames(sample_info) <- sample_info$samplename
 sample_info$condition <- as.factor(sample_info$condition)
 sample_info$batch <- as.factor(sample_info$batches)
 
 
 # annotation
-load(paste0(folderpath, '/data/data.Rdata'))
+load(paste0(folderpath, 'data/dds.RData')) 
+vsd <- vst(dds, blind = TRUE)
+expr_mat <- assay(vsd)  # Use this for ConsensusTME
+colnames(expr_mat)=dds$samplename
+
+load(paste0(folderpath, '/data/data.Rdata')) # annotation
 #head(data) # TPM counts
 
 # convert ENS gene id to Gene symbol
 # gene symbol x patients # Matrix is a numerical matrix with gene symbol as rownames
-matrix=data
+matrix=expr_mat
 genes=sub("\\..*", "", rownames(matrix))
 gene_map <- setNames(annotation$GeneSymbol, annotation$Gene)
 symbols <- gene_map[genes]
@@ -85,6 +91,10 @@ To investigate the relationship between TME content, CD82 gene expression and an
 ```{r}
 # sample_info
 
+add_info=read.table(paste0(folderpath, "/data/expr_aneuploidy_trop.csv"), header=T, sep = ',', row.names = 1)
+sample_info=merge(x = sample_info, y=add_info,  by.x = "samplename", by.y = "Group.1")
+sample_info$aneuploidy_score=sample_info$x
+
 sample_info$CD82_levels=ifelse( sample_info$ENSG00000085117> median(sample_info$ENSG00000085117, na.rm = TRUE), 'high-CD82', 'low-CD82')
 sample_info$aneuploidy_score_levels=ifelse(sample_info$aneuploidy_score> 0.1, 'high-aneuploidy_score', 'low-aneuploidy_score')
 
@@ -120,13 +130,15 @@ The following heatmap represents the results of the analysis.
 ```{r heatmap_gsva, fig.width=15, fig.height=10}
 
 # Create a data frame for annotation (must be a data frame with row names matching column names of matrix)
+rownames(sample_info)=sample_info$samplename
 annotation_df <- as.data.frame(sample_info[, c( "condition" , "CD82_levels", "aneuploidy_score_levels" ), drop = FALSE])
 colnames(annotation_df) <- c( "Condition" , "CD82_levels", "Aneuploidy_score_levels" )
 annotation_colors <- list(
   Condition = c(
     "HLT" = "#66c2a5",
     "HRplus" = "#fc8d62",
-    "TNBC" = "#8da0cb"
+    "TNBC" = "#8da0cb", 
+     "TROP" = "#1d3557"
   ),
   CD82_levels = c(
     "high-CD82"  = "#d95d39",
@@ -193,6 +205,23 @@ annotation_colors = annotation_colors,
 )
 ```
 
+#### TROP2 only
+```{r heatmap_gsva_trop, fig.width=15, fig.height=10}
+
+pheatmap(
+  consensus_list$gsva[, rownames(sample_info[sample_info$condition=='TROP', ]) ],
+  cluster_rows = TRUE,
+  cluster_cols = TRUE,
+  show_rownames = TRUE,
+  show_colnames = TRUE,
+  color = colorRampPalette(c("blue", "white", "red"))(50),
+  main = "consensusTME",
+  annotation_col = annotation_df[ rownames(sample_info[sample_info$condition=='TROP', ]) , ],
+annotation_colors = annotation_colors,
+)
+```
+
+
 #### Healthy only
 ```{r heatmap_gsva_HLT, fig.width=15, fig.height=10}
 
@@ -250,7 +279,7 @@ plots <- lapply(feature_vars, function(var) {
 })
 
 # Combine into a grid
-wrap_plots(plots, ncol = 4)
+wrap_plots(plots, ncol = 3)
 
 
 ```
@@ -374,31 +403,11 @@ wrap_plots(plots, ncol = 4)
 
 ```
 
-# Boxplot of TME enrichment across CD82 expression categories (by IHC) in TNBC
-Only TNBC samples are included as only 3 TNBC samples are categorized as high-expression by IHC
-
-```{r boxplot_by_category, fig.width=15, fig.height=15, out.width="100%"}
-condition_col <-"CATEGORY.1." # "CATEGORY.1." #"CD82_levels"
-boxplot_vars = colnames(consensus)[2:20]
-
-plots <- lapply(boxplot_vars, function(var) {
-  ggplot(df[df$condition=="TNBC",], aes_string(x = condition_col, y = var, fill = condition_col)) +
-    geom_boxplot(outlier.shape = NA, alpha = 0.7) +
-    geom_jitter(width = 0.2, alpha = 0.4, size = 0.8) +
-    ggtitle(var) +
-    theme_minimal(base_size = 10) +
-    theme(legend.position = "none")
-})
-wrap_plots(plots, ncol = 4)
-
-
-```
-
 
 ## Table of all samples 
 ```{r}
 datatable(
-  consensus[, !(names(consensus) %in% c("files", "batches"))],
+  consensus[, !(names(consensus) %in% c("files", "batches", "x"))],
   extensions = 'Buttons',
   options = list(
     dom = 'Blfrtip',
