@@ -20,7 +20,7 @@ This  website contains the analysis of RNAseq sample to infer aneuploidy
 
 # Casper
 
-- [1-CNV calling using CaSpER](00_casper_analysis.html)  <span class="label btn-warning"> Updated by adding new samples </span>
+- [1-CNV calling using CaSpER](00_casper_analysis.html)
 
 - [2-Differential Expression analysis between conditions](01_degs_go.html)
 
@@ -28,7 +28,9 @@ This  website contains the analysis of RNAseq sample to infer aneuploidy
 
 - [4-Differential Expression analysis based on CD82 gene expression](03_degs_go_CD82expr.html)
 
-- [5-Deconvolution analysis with ConsensusTME](04_deconvolution.html)
+- [5-Deconvolution analysis with ConsensusTME](04_deconvolution.html) <span class="label btn-warning"> Updated by adding new samples </span>
+
+- [6-Differential Expression analysis between TROP2 samples, primary TNBC and healthy](05_degs_go_trop.html) <span class="label btn-warning"> New </span>
 
 
 
